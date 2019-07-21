@@ -69,9 +69,7 @@ class KNearestNeighbor(object):
         dists = np.zeros((num_test, num_train))
         for i in range(num_test):
             for j in range(num_train):
-                # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
                 dists[i, j] = np.sum((X[i, :] - self.X_train[j, :]) ** 2)
-                # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         return dists
 
     def compute_distances_one_loop(self, X):
@@ -85,9 +83,7 @@ class KNearestNeighbor(object):
         num_train = self.X_train.shape[0]
         dists = np.zeros((num_test, num_train))
         for i in range(num_test):
-            # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             dists[i] = np.sum((X[i, :] - self.X_train) ** 2, axis=1)
-            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         return dists
 
     def compute_distances_no_loops(self, X):
@@ -99,11 +95,9 @@ class KNearestNeighbor(object):
         """
         num_test = X.shape[0]
         num_train = self.X_train.shape[0]
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         x2 = np.sum(X ** 2, axis = 1).reshape((num_test, 1))
         x_train2 = np.sum(self.X_train ** 2, axis = 1).reshape((1, num_train))
         dists = x2 + x_train2 - 2 * np.dot(X, self.X_train.T)
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         return dists
 
     def predict_labels(self, dists, k=1):
@@ -125,15 +119,11 @@ class KNearestNeighbor(object):
             # A list of length k storing the labels of the k nearest neighbors to
             # the ith test point.
             
-            # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             closest_y = []
             closest_y = self.y_train[np.argsort(dists[i])[:k]]
-            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             
-            # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
             freq = Counter(closest_y)     # builds a dictionary. keys => elements, values => frequencies
             freq = freq.most_common()     # sorts the dictionary descending according to frequencies.
-#             print(freq)
             max_freq = freq[0][1]         # finds the maximum freq among the elements
             
             # the next 6 lines find smallest label with maximum freq.
@@ -144,6 +134,5 @@ class KNearestNeighbor(object):
                     min_label = freq[j][0]
                 j += 1
             y_pred[i] = min_label
-            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         return y_pred
