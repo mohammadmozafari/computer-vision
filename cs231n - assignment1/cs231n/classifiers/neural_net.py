@@ -72,48 +72,47 @@ class TwoLayerNet(object):
         N, D = X.shape
 
         # Compute the forward pass
-        scores = None
-        #############################################################################
-        # TODO: Perform the forward pass, computing the class scores for the input. #
-        # Store the result in the scores variable, which should be an array of      #
-        # shape (N, C).                                                             #
-        #############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        m1 = X @ W1                         # (N, H)
+        bias1 = m1 + b1                     # (N, H)
+        relu = (bias1 > 0) * bias1          # (N, H)
+        m2 = relu @ W2                      # (N, C)
+        bias2 = m2 + b2                     # (N, C)
+        scores = bias2                      # (N, C)
 
         # If the targets are not given then jump out, we're done
         if y is None:
             return scores
 
         # Compute the loss
-        loss = None
-        #############################################################################
-        # TODO: Finish the forward pass, and compute the loss. This should include  #
-        # both the data loss and L2 regularization for W1 and W2. Store the result  #
-        # in the variable loss, which should be a scalar. Use the Softmax           #
-        # classifier loss.                                                          #
-        #############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        scores = np.math.e ** scores
+        summation = np.sum(scores, axis=1)       # (N, )
+        right_class_scores = scores[range(N), y]
+        loss = (np.sum(np.log(summation) - np.log(right_class_scores))) / N + reg * (np.sum(W1 * W1) + np.sum(W2 * W2))
 
         # Backward pass: compute gradients
+        scores = (scores.T / summation).T               # (N, C)
+        scores[range(N), y] -= 1                        # (N, C)
+        d_bias2 = scores / N                            # (N, C)
+        d_b2 = np.sum(d_bias2, axis=0)                    # (C,)
+        d_m2 = d_bias2                                  # (N, C)
+        d_W2 = relu.T @ d_m2                            # (H, C)
+        d_relu = d_m2 @ W2.T                            # (N, H)
+        d_bias1 = (relu > 0) * d_relu                   # (N, H)
+        d_b1 = np.sum(d_bias1, axis=0)                  # (H,)
+        d_m1 = d_bias1                                  # (N, H)
+        d_X = d_m1 @ W1.T                               # (N, D)
+        d_W1 = X.T @ d_m1                               # (D, H)
+
+        d_W1 += 2 * reg * W1
+        d_W2 += 2 * reg * W2
+        d_b1 += 2 * reg * b1
+        d_b2 += 2 * reg * b2
+
         grads = {}
-        #############################################################################
-        # TODO: Compute the backward pass, computing the derivatives of the weights #
-        # and biases. Store the results in the grads dictionary. For example,       #
-        # grads['W1'] should store the gradient on W1, and be a matrix of same size #
-        #############################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        grads['W1'] = d_W1
+        grads['W2'] = d_W2
+        grads['b1'] = d_b1
+        grads['b2'] = d_b2
 
         return loss, grads
 
