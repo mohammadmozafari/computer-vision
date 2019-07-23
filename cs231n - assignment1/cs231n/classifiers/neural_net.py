@@ -84,6 +84,7 @@ class TwoLayerNet(object):
             return scores
 
         # Compute the loss
+        scores = (scores.T - np.max(scores, axis=1)).T
         scores = np.math.e ** scores
         summation = np.sum(scores, axis=1)       # (N, )
         right_class_scores = scores[range(N), y]
@@ -93,7 +94,7 @@ class TwoLayerNet(object):
         scores = (scores.T / summation).T               # (N, C)
         scores[range(N), y] -= 1                        # (N, C)
         d_bias2 = scores / N                            # (N, C)
-        d_b2 = np.sum(d_bias2, axis=0)                    # (C,)
+        d_b2 = np.sum(d_bias2, axis=0)                  # (C,)
         d_m2 = d_bias2                                  # (N, C)
         d_W2 = relu.T @ d_m2                            # (H, C)
         d_relu = d_m2 @ W2.T                            # (N, H)
@@ -137,8 +138,8 @@ class TwoLayerNet(object):
         - batch_size: Number of training examples to use per step.
         - verbose: boolean; if true print progress during optimization.
         """
-        num_train = X.shape[0]
-        iterations_per_epoch = max(num_train / batch_size, 1)
+        N = X.shape[0]
+        iterations_per_epoch = max(N / batch_size, 1)
 
         # Use SGD to optimize the parameters in self.model
         loss_history = []
@@ -146,34 +147,21 @@ class TwoLayerNet(object):
         val_acc_history = []
 
         for it in range(num_iters):
-            X_batch = None
-            y_batch = None
+            
+            # create a random batch of training data
+            idx = np.random.choice(N, batch_size, replace=True)
+            X_batch = X[idx, :]
+            y_batch = y[idx]
 
-            #########################################################################
-            # TODO: Create a random minibatch of training data and labels, storing  #
-            # them in X_batch and y_batch respectively.                             #
-            #########################################################################
-            # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-            pass
-
-            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-            # Compute loss and gradients using the current minibatch
+            # compute loss and gradients using the current minibatch
             loss, grads = self.loss(X_batch, y=y_batch, reg=reg)
             loss_history.append(loss)
 
-            #########################################################################
-            # TODO: Use the gradients in the grads dictionary to update the         #
-            # parameters of the network (stored in the dictionary self.params)      #
-            # using stochastic gradient descent. You'll need to use the gradients   #
-            # stored in the grads dictionary defined above.                         #
-            #########################################################################
-            # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-            pass
-
-            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+            # perform parameter update
+            self.params['W1'] += - learning_rate * grads['W1']
+            self.params['W2'] += - learning_rate * grads['W2']
+            self.params['b1'] += - learning_rate * grads['b1']
+            self.params['b2'] += - learning_rate * grads['b2']
 
             if verbose and it % 100 == 0:
                 print('iteration %d / %d: loss %f' % (it, num_iters, loss))
@@ -210,15 +198,6 @@ class TwoLayerNet(object):
           the elements of X. For all i, y_pred[i] = c means that X[i] is predicted
           to have class c, where 0 <= c < C.
         """
-        y_pred = None
-
-        ###########################################################################
-        # TODO: Implement this function; it should be VERY simple!                #
-        ###########################################################################
-        # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
-        # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        y_pred = np.argmax(self.loss(X), axis=1)
 
         return y_pred
