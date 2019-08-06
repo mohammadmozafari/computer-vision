@@ -38,8 +38,10 @@ class TwoLayerNet(object):
         self.params = {}
         self.reg = reg
 
-        self.params['W1'] = weight_scale * np.random.randn(input_dim, hidden_dim)
-        self.params['W2'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['W1'] = weight_scale * \
+            np.random.randn(input_dim, hidden_dim)
+        self.params['W2'] = weight_scale * \
+            np.random.randn(hidden_dim, num_classes)
         self.params['b1'] = np.zeros(hidden_dim)
         self.params['b2'] = np.zeros(num_classes)
 
@@ -65,7 +67,8 @@ class TwoLayerNet(object):
 
         a1, a1cache = affine_forward(X, self.params['W1'], self.params['b1'])
         r1, r1cache = relu_forward(a1)
-        scores, a2cache = affine_forward(r1, self.params['W2'], self.params['b2'])
+        scores, a2cache = affine_forward(
+            r1, self.params['W2'], self.params['b2'])
 
         # If y is None then we are in test mode so just return scores
         if y is None:
@@ -74,7 +77,8 @@ class TwoLayerNet(object):
         loss, grads = 0, {}
 
         loss, dscores = softmax_loss(scores, y)
-        loss += 0.5 * self.reg * (np.sum(self.params['W1'] ** 2) + np.sum(self.params['W2'] ** 2))
+        loss += 0.5 * self.reg * \
+            (np.sum(self.params['W1'] ** 2) + np.sum(self.params['W2'] ** 2))
         dr1, dw2, db2 = affine_backward(dscores, a2cache)
         da1 = relu_backward(dr1, r1cache)
         dx, dw1, db1 = affine_backward(da1, a1cache)
@@ -135,7 +139,16 @@ class FullyConnectedNet(object):
         self.num_layers = 1 + len(hidden_dims)
         self.dtype = dtype
         self.params = {}
+        self.shapes = {}
 
+        for i in range(len(hidden_dims) + 1):
+            A = input_dim if i == 0 else hidden_dims[i - 1]
+            B = num_classes if i == len(hidden_dims) else hidden_dims[i]
+
+            self.params['W%d' % (i + 1)] = weight_scale * np.random.randn(A, B)
+            self.params['b%d' % (i + 1)] = np.zeros(B)
+
+        self.shapes['L'] = len(hidden_dims) + 1
         ############################################################################
         # TODO: Initialize the parameters of the network, storing all values in    #
         # the self.params dictionary. Store weights and biases for the first layer #
@@ -172,15 +185,15 @@ class FullyConnectedNet(object):
         # of the first batch normalization layer, self.bn_params[1] to the forward
         # pass of the second batch normalization layer, etc.
         self.bn_params = []
-        if self.normalization=='batchnorm':
-            self.bn_params = [{'mode': 'train'} for i in range(self.num_layers - 1)]
-        if self.normalization=='layernorm':
+        if self.normalization == 'batchnorm':
+            self.bn_params = [{'mode': 'train'}
+                              for i in range(self.num_layers - 1)]
+        if self.normalization == 'layernorm':
             self.bn_params = [{} for i in range(self.num_layers - 1)]
 
         # Cast all parameters to the correct datatype
         for k, v in self.params.items():
             self.params[k] = v.astype(dtype)
-
 
     def loss(self, X, y=None):
         """
@@ -195,10 +208,30 @@ class FullyConnectedNet(object):
         # behave differently during training and testing.
         if self.use_dropout:
             self.dropout_param['mode'] = mode
-        if self.normalization=='batchnorm':
+        if self.normalization == 'batchnorm':
             for bn_param in self.bn_params:
                 bn_param['mode'] = mode
-        scores = None
+
+        out = X
+        cache = []
+        for i in range(self.shapes['L'] - 1):
+            out, affine_cache = affine_forward(
+                out, self.params['W%d' % (i + 1)], self.params['b%d' % (i + 1)])
+            out, relu_cache = relu_forward(out)
+            cache_dict = {}
+            cache_dict['x'] = affine_cache[0]
+            cache_dict['w'] = affine_cache[1]
+            cache_dict['b'] = affine_cache[2]
+            cache_dict['r'] = relu_cache
+            cache.append(cache_dict)
+
+        scores, affine_cache = affine_forward(
+            out, self.params['W%d' % self.shapes['L']], self.params['b%d' % self.shapes['L']])
+        cache_dict = {}
+        cache_dict['x'] = affine_cache[0]
+        cache_dict['w'] = affine_cache[1]
+        cache_dict['b'] = affine_cache[2]
+        cache.append(cache_dict)
         ############################################################################
         # TODO: Implement the forward pass for the fully-connected net, computing  #
         # the class scores for X and storing them in the scores variable.          #
@@ -225,6 +258,30 @@ class FullyConnectedNet(object):
             return scores
 
         loss, grads = 0.0, {}
+        loss, dout = softmax_loss(scores, y)
+
+        dout, dw, db = affine_backward(
+            dout, (cache[-1]['x'], cache[-1]['w'], cache[-1]['b']))
+
+        w = 'W%d' % self.shapes['L']
+        b = 'b%d' % self.shapes['L']
+
+        grads[w] = dw + self.reg * self.params[w]
+        grads[b] = db + self.reg * self.params[b]
+        loss += 0.5 * self.reg * np.sum(self.params[w] ** 2)
+
+        for i in reversed(range(self.shapes['L'] - 1)):
+            w = 'W%d' % (i + 1)
+            b = 'b%d' % (i + 1)
+
+            dout = relu_backward(dout, cache[i]['r'])
+            dout, dw, db = affine_backward(
+                dout, (cache[i]['x'], cache[i]['w'], cache[i]['b']))
+            
+            grads[w] = dw + self.reg * self.params[w]
+            grads[b] = db + self.reg * self.params[b]
+            loss += 0.5 * self.reg * np.sum(self.params[w] ** 2)
+
         ############################################################################
         # TODO: Implement the backward pass for the fully-connected net. Store the #
         # loss in the loss variable and gradients in the grads dictionary. Compute #
