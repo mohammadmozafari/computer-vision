@@ -137,15 +137,12 @@ def batchnorm_forward(x, gamma, beta, bn_param):
 	N, D = x.shape
 	running_mean = bn_param.get('running_mean', np.zeros(D, dtype=x.dtype))
 	running_var = bn_param.get('running_var', np.zeros(D, dtype=x.dtype))
-
-
-	batch_size = np.min([N, 100])
-	mini_batch = x[:batch_size, :]
+	
 	cache = None
 
 	if mode == 'train':
-		mu = np.mean(mini_batch, axis=0)
-		sigma2 = np.var(mini_batch, axis=0)
+		mu = np.mean(x, axis=0)
+		sigma2 = np.var(x, axis=0)
 		x_hat = (x - mu) / np.sqrt(sigma2 + eps)
 		out = x_hat * gamma + beta
 		cache = (x, mu, sigma2, x_hat, gamma, eps) 
@@ -251,26 +248,14 @@ def layernorm_forward(x, gamma, beta, ln_param):
 	- out: of shape (N, D)
 	- cache: A tuple of values needed in the backward pass
 	"""
-	out, cache = None, None
 	eps = ln_param.get('eps', 1e-5)
-	###########################################################################
-	# TODO: Implement the training-time forward pass for layer norm.          #
-	# Normalize the incoming data, and scale and  shift the normalized data   #
-	#  using gamma and beta.                                                  #
-	# HINT: this can be done by slightly modifying your training-time         #
-	# implementation of  batch normalization, and inserting a line or two of  #
-	# well-placed code. In particular, can you think of any matrix            #
-	# transformations you could perform, that would enable you to copy over   #
-	# the batch norm code and leave it almost unchanged?                      #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-	pass
-
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
+	mu = np.mean(x.T, axis=0)
+	sigma2 = np.var(x.T, axis=0)
+	x_hat = ((x.T - mu) / np.sqrt(sigma2 + eps)).T
+	out = x_hat * gamma + beta
+	cache = (x, mu, sigma2, x_hat, gamma, eps)
+	
 	return out, cache
 
 
@@ -290,22 +275,15 @@ def layernorm_backward(dout, cache):
 	- dgamma: Gradient with respect to scale parameter gamma, of shape (D,)
 	- dbeta: Gradient with respect to shift parameter beta, of shape (D,)
 	"""
-	dx, dgamma, dbeta = None, None, None
-	###########################################################################
-	# TODO: Implement the backward pass for layer norm.                       #
-	#                                                                         #
-	# HINT: this can be done by slightly modifying your training-time         #
-	# implementation of batch normalization. The hints to the forward pass    #
-	# still apply!                                                            #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+	x, mu, sigma2, x_hat, gamma, eps = cache
+	N, D = x.shape
 
-	pass
+	dx_hat = dout * gamma
+	dx = (sigma2 + eps) ** -0.5 * (dx_hat.T - np.sum(dx_hat.T, axis=0) / D - np.sum(dx_hat.T * x_hat.T, axis=0) * x_hat.T / D)
+	dx = dx.T
+	dgamma = np.sum(dout * x_hat, axis=0)
+	dbeta = np.sum(dout, axis=0)
 
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
 	return dx, dgamma, dbeta
 
 

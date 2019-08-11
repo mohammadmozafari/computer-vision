@@ -151,7 +151,7 @@ class FullyConnectedNet(object):
             beta = 'beta%d' % (i + 1)
             self.params[w] = weight_scale * np.random.randn(A, B)
             self.params[b] = np.zeros(B)
-            if (self.normalization == 'batchnorm') and (i != len(hidden_dims)):
+            if (self.normalization != None) and (i != len(hidden_dims)):
                 self.params[gamma] = np.ones(B)
                 self.params[beta] = np.zeros(B)
 
@@ -263,9 +263,14 @@ class FullyConnectedNet(object):
 
         # Run forward pass.
         out, cache['affine'] = affine_forward(out, self.params[w], self.params[b])
+        
         if normalization == 'batchnorm':
             out, cache['batchnorm'] = batchnorm_forward(out, self.params[gamma], self.params[beta],
-                                           bn_param=self.bn_params[layer_num])
+                                        bn_param=self.bn_params[layer_num])
+        elif normalization == 'layernorm':
+            out, cache['layernorm'] = layernorm_forward(batchnorm_forward(out, self.params[gamma], self.params[beta],
+                                        ln_param=self.bn_params[layer_num]))
+        
         out, cache['relu'] = relu_forward(out)
         return out, cache
 
@@ -276,6 +281,8 @@ class FullyConnectedNet(object):
         dout = relu_backward(dout, cache['relu'])
         if normalization == 'batchnorm':
             dout, dgamma, dbeta = batchnorm_backward_alt(dout, cache['batchnorm'])
+        elif normalization == 'layernorm':
+            dout, dgamma, dbeta = layernorm_backward(dout, cache['layernorm'])
         dout, dw, db = affine_backward(dout, cache['affine'])
         
         return dout, dw, db, dgamma, dbeta
