@@ -141,19 +141,18 @@ class FullyConnectedNet(object):
         self.params = {}
 
         # Define all parameters of the neural net in self.params dictionary.
-        for i in range(self.num_layers):
-            A = input_dim if i == 0 else hidden_dims[i - 1]
-            B = num_classes if i == len(hidden_dims) else hidden_dims[i]
+        # These parameters include "W" and "b" and in case we have normalization : "gamma" and "beta"
+        dimensions = np.hstack((input_dim, hidden_dims, num_classes))
 
-            w = 'W%d' % (i + 1)
-            b = 'b%d' % (i + 1)
-            gamma = 'gamma%d' % (i + 1)
-            beta = 'beta%d' % (i + 1)
-            self.params[w] = weight_scale * np.random.randn(A, B)
-            self.params[b] = np.zeros(B)
-            if (self.normalization != None) and (i != len(hidden_dims)):
-                self.params[gamma] = np.ones(B)
-                self.params[beta] = np.zeros(B)
+        for i in range(self.num_layers):
+            self.params['W' + str(i + 1)] = weight_scale * \
+                np.random.randn(dimensions[i], dimensions[i + 1])
+            self.params['b' + str(i + 1)] = np.zeros(dimensions[i + 1])
+
+        if self.normalization != None:
+            for i in range(len(hidden_dims)):
+                self.params[gamma] = np.ones(dimensions[i + 1])
+                self.params[beta] = np.zeros(dimensions[i + 1])
 
         # When using dropout we need to pass a dropout_param dictionary to each
         # dropout layer so that the layer knows the dropout probability and the mode
@@ -201,88 +200,67 @@ class FullyConnectedNet(object):
         # The scores are saved in scores variable.
         # cache is a list of dictionaries. Each element is cache for the corresponding layer to be used in backward pass.
         out, cache = X, []
-
-        # Run forward pass for first L - 1 layers.
         for i in range(self.num_layers - 1):
-            out, temp_cache = self._layer_forward(out, i, self.use_dropout, self.normalization)
+            out, temp_cache = self._layer_forward(out, i)
             cache.append(temp_cache)
-
-        # Perform forward pass for final layer to compute scores.
-        w = 'W%d' % self.num_layers
-        b = 'b%d' % self.num_layers
         temp_cache = {}
-        scores, temp_cache['affine'] = affine_forward(out, self.params[w], self.params[b])
+        out, temp_cache['affine'] = affine_forward(
+            out, self.params['W' + str(self.num_layers)], self.params['b' + str(self.num_layers)])
         cache.append(temp_cache)
+        scores = out
 
         # If test mode return early
         if mode == 'test':
             return scores
 
+        # Run backward pass.
         loss, grads = 0.0, {}
-
-        # Compute loss and gradient of softmax layer.
         loss, dout = softmax_loss(scores, y)
-
-        # Run backward pass for final layer.
         dout, dw, db = affine_backward(dout, cache[-1]['affine'])
-
-        # Update loss with regularization term.
-        # Store param gradients for final layer.
-        w = 'W%d' % self.num_layers
-        b = 'b%d' % self.num_layers
-        grads[w] = dw + self.reg * self.params[w]
-        grads[b] = db + self.reg * self.params[b]
-        loss += 0.5 * self.reg * (np.sum(self.params[w] ** 2) + np.sum(self.params[b] ** 2))
-
-        # Run backward pass for first L - 1 layers
+        grads['W' + str(self.num_layers)] = dw + self.reg * self.params['W' + str(self.num_layers)]
+        grads['b' + str(self.num_layers)] = db
+        loss += 0.5 * self.reg * np.sum(self.params['W' + str(self.num_layers)] ** 2)
         for i in reversed(range(self.num_layers - 1)):
-            dout, dw, db, dgamma, dbeta = self._layer_backward(dout, cache[i], self.use_dropout, self.normalization)
-
-            w = 'W%d' % (i + 1)
-            b = 'b%d' % (i + 1)
-            gamma = 'gamma%d' % (i + 1)
-            beta = 'beta%d' % (i + 1)
-            grads[w] = dw + self.reg * self.params[w]
-            grads[b] = db + self.reg * self.params[b]
-            grads[gamma] = dgamma
-            grads[beta] = dbeta
-            loss += 0.5 * self.reg * \
-                (np.sum(self.params[w] ** 2) + np.sum(self.params[b] ** 2))
+            dout, dw, db, dgamma, dbeta = self._layer_backward(dout, cache[i])
+            grads['W' + str(i + 1)] = dw + self.reg * self.params['W' + str(i + 1)]
+            grads['b' + str(i + 1)] = db
+            if self.normalization != None:
+                grads['gamma' + str(i + 1)] = dgamma
+                grads['beta' + str(i + 1)] = dbeta
+            loss += 0.5 * self.reg * np.sum(self.params['W' + str(i + 1)] ** 2)
 
         return loss, grads
 
-    def _layer_forward(self, x, layer_num, use_dropout, normalization=None):
-        # Define help vars.
-        w = 'W%d' % (layer_num + 1)
-        b = 'b%d' % (layer_num + 1)
-        gamma = 'gamma%d' % (layer_num + 1)
-        beta = 'beta%d' % (layer_num + 1)
+    def _layer_forward(self, x, layer_num):
+        w = 'W' + str(layer_num + 1)
+        b = 'b' + str(layer_num + 1)
+        gamma = 'gamma' + str(layer_num + 1)
+        beta = 'beta'+ str(layer_num + 1)
 
         out = x
         cache = {}
-
-        # Run forward pass.
         out, cache['affine'] = affine_forward(out, self.params[w], self.params[b])
-        
-        if normalization == 'batchnorm':
+        if self.normalization == 'batchnorm':
             out, cache['batchnorm'] = batchnorm_forward(out, self.params[gamma], self.params[beta],
-                                        bn_param=self.bn_params[layer_num])
-        elif normalization == 'layernorm':
-            out, cache['layernorm'] = layernorm_forward(batchnorm_forward(out, self.params[gamma], self.params[beta],
-                                        ln_param=self.bn_params[layer_num]))
-        
+                                                        bn_param=self.bn_params[layer_num])
+        elif self.normalization == 'layernorm':
+            out, cache['layernorm'] = layernorm_forward(out, self.params[gamma], self.params[beta],
+                                                        ln_param=self.bn_params[layer_num])
+        if self.use_dropout:
+            out, cache['dropout'] = dropout_forward(out, self.dropout_param)
         out, cache['relu'] = relu_forward(out)
         return out, cache
 
-    def _layer_backward(self, dout, cache, use_dropout, normalization):
+    def _layer_backward(self, dout, cache):
         dgamma, dbeta = None, None
-
-        # Run backward pass.
         dout = relu_backward(dout, cache['relu'])
-        if normalization == 'batchnorm':
+        
+        if self.use_dropout:
+            dout = dropout_backward(dout, cache['dropout'])
+        if self.normalization == 'batchnorm':
             dout, dgamma, dbeta = batchnorm_backward_alt(dout, cache['batchnorm'])
-        elif normalization == 'layernorm':
+        elif self.normalization == 'layernorm':
             dout, dgamma, dbeta = layernorm_backward(dout, cache['layernorm'])
         dout, dw, db = affine_backward(dout, cache['affine'])
-        
+
         return dout, dw, db, dgamma, dbeta
