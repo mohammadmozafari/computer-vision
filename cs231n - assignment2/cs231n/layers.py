@@ -21,9 +21,7 @@ def affine_forward(x, w, b):
 	- cache: (x, w, b)
 	"""
 
-	# shapes
 	N = np.shape(x)[0]
-
 	cache = (x, w, b)
 	x = np.reshape(x, (N, -1))    # (N, D)
 	out = x @ w + b
@@ -48,9 +46,7 @@ def affine_backward(dout, cache):
 	"""
 
 	x, w, b = cache
-	# shapes
 	N = np.shape(x)[0]
-
 	dx = np.reshape(dout @ w.T, (x.shape))
 	dw = np.reshape(x, (N, -1)).T @ dout
 	db = np.sum(dout, axis=0)
@@ -70,7 +66,7 @@ def relu_forward(x):
 	"""
 
 	out = x.copy()
-	out[out < 0] = 0
+	out[out <= 0] = 0
 	cache = x
 	return out, x
 
@@ -87,7 +83,7 @@ def relu_backward(dout, cache):
 	- dx: Gradient with respect to x
 	"""
 	x = cache
-	dout[x < 0] = 0
+	dout[x <= 0] = 0
 	dx = dout
 	return dx
 
@@ -320,7 +316,7 @@ def dropout_forward(x, dropout_param):
 	mask = None
 
 	if mode == 'train':
-		mask = (np.random.rand(*x.shape) > p) / (1 - p)
+		mask = (np.random.rand(*x.shape) < p) / p
 		out = x * mask
 	elif mode == 'test':
 		out = x

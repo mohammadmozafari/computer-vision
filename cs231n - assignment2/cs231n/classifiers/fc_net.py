@@ -38,10 +38,8 @@ class TwoLayerNet(object):
         self.params = {}
         self.reg = reg
 
-        self.params['W1'] = weight_scale * \
-            np.random.randn(input_dim, hidden_dim)
-        self.params['W2'] = weight_scale * \
-            np.random.randn(hidden_dim, num_classes)
+        self.params['W1'] = weight_scale * np.random.randn(input_dim, hidden_dim)
+        self.params['W2'] = weight_scale * np.random.randn(hidden_dim, num_classes)
         self.params['b1'] = np.zeros(hidden_dim)
         self.params['b2'] = np.zeros(num_classes)
 
@@ -145,14 +143,13 @@ class FullyConnectedNet(object):
         dimensions = np.hstack((input_dim, hidden_dims, num_classes))
 
         for i in range(self.num_layers):
-            self.params['W' + str(i + 1)] = weight_scale * \
-                np.random.randn(dimensions[i], dimensions[i + 1])
+            self.params['W' + str(i + 1)] = weight_scale * np.random.randn(dimensions[i], dimensions[i + 1])
             self.params['b' + str(i + 1)] = np.zeros(dimensions[i + 1])
 
         if self.normalization != None:
             for i in range(len(hidden_dims)):
-                self.params[gamma] = np.ones(dimensions[i + 1])
-                self.params[beta] = np.zeros(dimensions[i + 1])
+                self.params['gamma' + str(i + 1)] = np.ones(dimensions[i + 1])
+                self.params['beta' + str(i + 1)] = np.zeros(dimensions[i + 1])
 
         # When using dropout we need to pass a dropout_param dictionary to each
         # dropout layer so that the layer knows the dropout probability and the mode
@@ -220,7 +217,7 @@ class FullyConnectedNet(object):
         grads['W' + str(self.num_layers)] = dw + self.reg * self.params['W' + str(self.num_layers)]
         grads['b' + str(self.num_layers)] = db
         loss += 0.5 * self.reg * np.sum(self.params['W' + str(self.num_layers)] ** 2)
-        for i in reversed(range(self.num_layers - 1)):
+        for i in range(self.num_layers - 2, -1, -1):
             dout, dw, db, dgamma, dbeta = self._layer_backward(dout, cache[i])
             grads['W' + str(i + 1)] = dw + self.reg * self.params['W' + str(i + 1)]
             grads['b' + str(i + 1)] = db
@@ -232,31 +229,30 @@ class FullyConnectedNet(object):
         return loss, grads
 
     def _layer_forward(self, x, layer_num):
-        w = 'W' + str(layer_num + 1)
-        b = 'b' + str(layer_num + 1)
-        gamma = 'gamma' + str(layer_num + 1)
-        beta = 'beta'+ str(layer_num + 1)
+        w = self.params['W' + str(layer_num + 1)]
+        b = self.params['b' + str(layer_num + 1)]
+        if self.normalization != None:
+            gamma = self.params['gamma' + str(layer_num + 1)]
+            beta = self.params['beta'+ str(layer_num + 1)]
 
         out = x
         cache = {}
-        out, cache['affine'] = affine_forward(out, self.params[w], self.params[b])
+        out, cache['affine'] = affine_forward(out, w, b)
         if self.normalization == 'batchnorm':
-            out, cache['batchnorm'] = batchnorm_forward(out, self.params[gamma], self.params[beta],
-                                                        bn_param=self.bn_params[layer_num])
+            out, cache['batchnorm'] = batchnorm_forward(out, gamma, beta, bn_param=self.bn_params[layer_num])
         elif self.normalization == 'layernorm':
-            out, cache['layernorm'] = layernorm_forward(out, self.params[gamma], self.params[beta],
-                                                        ln_param=self.bn_params[layer_num])
+            out, cache['layernorm'] = layernorm_forward(out, gamma, beta, ln_param=self.bn_params[layer_num])
+        out, cache['relu'] = relu_forward(out)
         if self.use_dropout:
             out, cache['dropout'] = dropout_forward(out, self.dropout_param)
-        out, cache['relu'] = relu_forward(out)
         return out, cache
 
     def _layer_backward(self, dout, cache):
         dgamma, dbeta = None, None
-        dout = relu_backward(dout, cache['relu'])
         
         if self.use_dropout:
             dout = dropout_backward(dout, cache['dropout'])
+        dout = relu_backward(dout, cache['relu'])
         if self.normalization == 'batchnorm':
             dout, dgamma, dbeta = batchnorm_backward_alt(dout, cache['batchnorm'])
         elif self.normalization == 'layernorm':
