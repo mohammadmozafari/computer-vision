@@ -1,5 +1,6 @@
 from builtins import range
 import numpy as np
+from scipy import signal
 
 
 def affine_forward(x, w, b):
@@ -373,19 +374,22 @@ def conv_forward_naive(x, w, b, conv_param):
 	  W' = 1 + (W + 2 * pad - WW) / stride
 	- cache: (x, w, b, conv_param)
 	"""
-	out = None
-	###########################################################################
-	# TODO: Implement the convolutional forward pass.                         #
-	# Hint: you can use the function np.pad for padding.                      #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+	N, C, H, W = x.shape
+	F, _, HH, WW = w.shape
+	stride = conv_param['stride']
+	pad = conv_param['pad']	
+	Hprime = 1 + (H + 2 * pad - HH) // stride
+	Wprime = 1 + (W + 2 * pad - WW) // stride
 
-	pass
-
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
+	out = np.zeros((N, F, Hprime, Wprime))
+	for n in range(N):
+		padded = np.pad(x[n], ((0, ), (pad, ), (pad, )), mode='constant', constant_values=((0, ), (0, ), (0, )))
+		for f in range(F):
+			flipped = np.flip(w[f])
+			panel = signal.convolve(padded, flipped, mode='valid')
+			panel = panel[0, 0::stride, 0::stride]
+			out[n, f] = panel + b[f]
+			
 	cache = (x, w, b, conv_param)
 	return out, cache
 

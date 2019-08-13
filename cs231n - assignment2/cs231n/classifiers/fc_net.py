@@ -65,8 +65,7 @@ class TwoLayerNet(object):
 
         a1, a1cache = affine_forward(X, self.params['W1'], self.params['b1'])
         r1, r1cache = relu_forward(a1)
-        scores, a2cache = affine_forward(
-            r1, self.params['W2'], self.params['b2'])
+        scores, a2cache = affine_forward(r1, self.params['W2'], self.params['b2'])
 
         # If y is None then we are in test mode so just return scores
         if y is None:
