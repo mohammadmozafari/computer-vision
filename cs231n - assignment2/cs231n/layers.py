@@ -382,43 +382,46 @@ def conv_forward_naive(x, w, b, conv_param):
 	Wprime = 1 + (W + 2 * pad - WW) // stride
 
 	out = np.zeros((N, F, Hprime, Wprime))
+	row_f = w.reshape((F, -1))
 	for n in range(N):
 		padded = np.pad(x[n], ((0, ), (pad, ), (pad, )), mode='constant', constant_values=((0, ), (0, ), (0, )))
-		for f in range(F):
-			flipped = np.flip(w[f])
-			panel = signal.convolve(padded, flipped, mode='valid')
-			panel = panel[0, 0::stride, 0::stride]
-			out[n, f] = panel + b[f]
-			
+		reshaped, _ = im2col_forward(padded, w[0].shape, stride)
+		out[n] = ((row_f @ reshaped).reshape((F, Hprime, Wprime)).T + b).T
+
 	cache = (x, w, b, conv_param)
 	return out, cache
 
 
 def conv_backward_naive(dout, cache):
 	"""
-	A naive implementation of the backward pass for a convolutional layer.
-
+	A naive implementation of the backward pass for a convolutional layer.  
 	Inputs:
-	- dout: Upstream derivatives.
-	- cache: A tuple of (x, w, b, conv_param) as in conv_forward_naive
-
+	- dout: Upstream derivatives of shape (N, F, H', W')
+	- cache: A tuple of (x, w, b, conv_param) as in conv_forward_naive  
 	Returns a tuple of:
 	- dx: Gradient with respect to x
 	- dw: Gradient with respect to w
 	- db: Gradient with respect to b
 	"""
-	dx, dw, db = None, None, None
-	###########################################################################
-	# TODO: Implement the convolutional backward pass.                        #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-	pass
-
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
+	x, w, b, conv_param = cache
+	dx, dw, db = np.zeros(x.shape), np.zeros(w.shape), np.zeros(b.shape)    
+	N, C, H, W = x.shape
+	F, _, HH, WW = w.shape
+	stride = conv_param['stride']
+	pad = conv_param['pad']
+	Hprime = 1 + (H + 2 * pad - HH) // stride
+	Wprime = 1 + (W + 2 * pad - WW) // stride   
+	row_f = w.reshape((F, -1))                                                              # (F, HH * WW)
+	for n in range(N):
+		padded = np.pad(x[n], ((0, ), (pad, ), (pad, )), mode='constant',
+					   constant_values=((0, ), (0, ), (0, )))                               # (C, HP, WP)
+		reshaped, cache = im2col_forward(padded, w[0].shape, stride)                        # (C * HH * WW, H' * W')
+		dreshaped = row_f.T @ dout[n].reshape((-1, Hprime * Wprime))
+		dreshaped = dreshaped.reshape((-1, Hprime * Wprime))                      			# (C * HH * WW, H' * W')
+		dx[n] = im2col_backward(dreshaped, cache)[:, pad:-pad, pad:-pad]                    # (C, H, W)
+		dw += (dout[n].reshape((-1, Wprime * Hprime)) @ reshaped.T).reshape((F, C, HH, WW))
+		db += (np.sum(dout[n], axis=1)).sum(axis=1)
+		
 	return dx, dw, db
 
 
@@ -680,3 +683,59 @@ def softmax_loss(x, y):
 	dx[np.arange(N), y] -= 1
 	dx /= N
 	return loss, dx
+
+def im2col_forward(x, filter_shape, stride):
+	"""
+	Inputes:
+	- x: input image of shape (C, PH, PW)
+	- filter_shape: shape of filter (C, HH, WW)
+	- stride: scalar
+
+	Returns a tuple of:
+	- out: column image of shape (C * HH * WW, H' * W')
+	- cache: filter_shape
+	"""
+	C, PH, PW = x.shape
+	_, HH, WW = filter_shape
+	Hprime = 1 + (PH - HH) // stride
+	Wprime = 1 + (PW - WW) // stride
+
+	out = np.zeros((C * HH * WW, Hprime * Wprime))
+	height, i = 0, 0
+	while height + HH <= PH:
+		width = 0
+		while width + WW <= PW:
+			column = x[:, height:height+HH, width:width+WW].reshape(-1)
+			out[:, i] = column
+			i += 1
+			width += stride
+		height += stride
+
+	cache = x.shape, filter_shape, stride
+	return out, cache
+
+
+def im2col_backward(dout, cache):
+	"""
+	Inputs:
+	- dout: upstream derivative of shape (C * HH * WW, H' * W')
+	- cache: (x_shape, filter_shape, stride)
+
+	Returns:
+	- dx: derivative with respect to x with shape (C, H, W)
+	"""
+	x_shape, filter_shape, stride = cache
+	C, PH, PW = x_shape
+	_, HH, WW = filter_shape
+
+	dx = np.zeros(x_shape)                                      # (C, PH, PW)
+	height, width = 0, 0
+	for i in range(dout.shape[1]):
+		reshaped = dout[:, i].reshape((C, HH, WW))              # (C, HH, WW)
+		if width+WW > PW:
+			width = 0
+			height += stride
+		dx[:, height:height+HH, width:width+WW] += reshaped
+		width += stride
+	
+	return dx
