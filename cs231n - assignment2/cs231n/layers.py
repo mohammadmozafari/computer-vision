@@ -407,14 +407,13 @@ def conv_backward_naive(dout, cache):
 	dx, dw, db = np.zeros(x.shape), np.zeros(w.shape), np.zeros(b.shape)    
 	N, C, H, W = x.shape
 	F, _, HH, WW = w.shape
-	stride = conv_param['stride']
-	pad = conv_param['pad']
+	stride, pad = conv_param['stride'], conv_param['pad']
 	Hprime = 1 + (H + 2 * pad - HH) // stride
 	Wprime = 1 + (W + 2 * pad - WW) // stride   
+	
 	row_f = w.reshape((F, -1))                                                              # (F, HH * WW)
 	for n in range(N):
-		padded = np.pad(x[n], ((0, ), (pad, ), (pad, )), mode='constant',
-					   constant_values=((0, ), (0, ), (0, )))                               # (C, HP, WP)
+		padded = np.pad(x[n], ((0,0), (pad,pad), (pad,pad)), mode='constant')               # (C, HP, WP)
 		reshaped, cache = im2col_forward(padded, w[0].shape, stride)                        # (C * HH * WW, H' * W')
 		dreshaped = row_f.T @ dout[n].reshape((-1, Hprime * Wprime))
 		dreshaped = dreshaped.reshape((-1, Hprime * Wprime))                      			# (C * HH * WW, H' * W')
@@ -442,21 +441,29 @@ def max_pool_forward_naive(x, pool_param):
 	- out: Output data, of shape (N, C, H', W') where H' and W' are given by
 	  H' = 1 + (H - pool_height) / stride
 	  W' = 1 + (W - pool_width) / stride
-	- cache: (x, pool_param)
+	- cache: (x, gradient_rout, pool_param)
 	"""
-	out = None
-	###########################################################################
-	# TODO: Implement the max-pooling forward pass                            #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+	N, C, H, W = x.shape
+	PH = pool_param['pool_height']
+	PW = pool_param['pool_width']
+	stride = pool_param['stride']
+	Hprime = 1 + (H - PH) // stride
+	Wprime = 1 + (W - PW) // stride
+	
+	out = np.zeros((N, C, Hprime, Wprime))
+	gradient_route = np.zeros((N, C, PH * PW, Hprime * Wprime))
+	for n in range(N):
+		for c in range(C):
+			reshaped, _ = im2col_forward(x[n, c:c+1], (1, PH, PW), stride)
+			reshaped = reshaped.squeeze()
+			assert reshaped.shape == (PH * PW, Hprime * Wprime)
+			reshaped_max = np.amax(reshaped, axis=0)
+			assert reshaped_max.shape == (Hprime * Wprime, )
+			max_array = reshaped_max.reshape(Hprime, Wprime)
+			gradient_route[n, c] = (reshaped >= reshaped_max) * 1
+			out[n, c] = max_array
 
-	pass
-
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
-	cache = (x, pool_param)
+	cache = (x, gradient_route, pool_param)
 	return out, cache
 
 
@@ -466,23 +473,22 @@ def max_pool_backward_naive(dout, cache):
 
 	Inputs:
 	- dout: Upstream derivatives
-	- cache: A tuple of (x, pool_param) as in the forward pass.
+	- cache: A tuple of (x, gradient_route, pool_param) as in the forward pass.
 
 	Returns:
 	- dx: Gradient with respect to x
 	"""
-	dx = None
-	###########################################################################
-	# TODO: Implement the max-pooling backward pass                           #
-	###########################################################################
-	# *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-	pass
-
-	# *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-	###########################################################################
-	#                             END OF YOUR CODE                            #
-	###########################################################################
+	x, gradient_route, pool_param = cache
+	PH, PW, stride = pool_param['pool_height'], pool_param['pool_width'], pool_param['stride']
+	N, C, H, W = x.shape
+	
+	dx = np.zeros(x.shape)
+	ravelled = np.reshape(dout, (dout.shape[0], dout.shape[1], -1))										# (H' * W', )
+	gradient = (ravelled * np.transpose(gradient_route, (2, 0, 1, 3))).transpose((1, 2, 0, 3))
+	for n in range(N):
+		for c in range(C):
+			dx[n, c] = im2col_backward(gradient[n, c], (x[0, 0:1].shape, (1, PH, PW), stride))
+	
 	return dx
 
 
