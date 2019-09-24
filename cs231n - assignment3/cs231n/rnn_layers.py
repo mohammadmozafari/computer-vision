@@ -81,13 +81,13 @@ def rnn_forward(x, h0, Wx, Wh, b):
     """
     _, T, D = x.shape
     N, H = h0.shape
-    cache = np.zeros((T, N, ))
+    cache = []
     h = np.zeros((N, T, H))
-    h[:, 0, :], _ = rnn_step_forward(x[:, 0, :], h0, Wx, Wh, b)
+    h[:, 0, :], t = rnn_step_forward(x[:, 0, :], h0, Wx, Wh, b)
+    cache.append(t)
     for i in range(1, T):
-        h[:, i, :], _ = rnn_step_forward(x[:, i, :], h[:, i - 1, :], Wx, Wh, b)
-        cache
-    # cache = x,
+        h[:, i, :], t = rnn_step_forward(x[:, i, :], h[:, i - 1, :], Wx, Wh, b)
+        cache.append(t)
 
     return h, cache
 
@@ -111,28 +111,22 @@ def rnn_backward(dh, cache):
     - dWh: Gradient of hidden-to-hidden weights, of shape (H, H)
     - db: Gradient of biases, of shape (H,)
     """
-    dx, dh0, dWx, dWh, db = None, None, 0, 0, 0
-    _, T, _ = dh 
+    _, T, H = dh.shape
+    N, D = cache[0][1].shape
+    dWx, dWh, db = 0, 0, 0
+    dx = np.zeros((N, T, D))
+    dhcopy = np.copy(dh)
     for i in reversed(range(T)):
-        t1, t2, t3, t4, t5 = rnn_step_backward(dh[:, i, :], cache[i])
+        t1, t2, t3, t4, t5 = rnn_step_backward(dhcopy[:, i, :], cache[i])
         dx[:, i, :] = t1
-        dh[:, i - 1, :] += t2
         dWx += t3
         dWh += t4
         db += t5
-    ##############################################################################
-    # TODO: Implement the backward pass for a vanilla RNN running an entire      #
-    # sequence of data. You should use the rnn_step_backward function that you   #
-    # defined above. You can use a for loop to help compute the backward pass.   #
-    ##############################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        if i == 0:
+            dh0 = t2
+        else:
+            dhcopy[:, i - 1, :] += t2
 
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    ##############################################################################
-    #                               END OF YOUR CODE                             #
-    ##############################################################################
     return dx, dh0, dWx, dWh, db
 
 
