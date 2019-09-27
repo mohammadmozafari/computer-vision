@@ -210,19 +210,12 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     - next_c: Next cell state, of shape (N, H)
     - cache: Tuple of values needed for backward pass.
     """
-    next_h, next_c, cache = None, None, None
-    #############################################################################
-    # TODO: Implement the forward pass for a single timestep of an LSTM.        #
-    # You may want to use the numerically stable sigmoid implementation above.  #
-    #############################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    ##############################################################################
-    #                               END OF YOUR CODE                             #
-    ##############################################################################
+    N, H = prev_h.shape
+    A = x @ Wx + prev_h @ Wh + b
+    i, f, o, g = sigmoid(A[:, :H]), sigmoid(A[:, H:2*H]), sigmoid(A[:, 2*H:3*H]), np.tanh(A[:, -H:])
+    next_c = f * prev_c + i * g
+    next_h = o * np.tanh(next_c)
+    cache = i, f, o, g, prev_c, next_c, x, Wx, prev_h, Wh, b, A
 
     return next_h, next_c, cache
 
@@ -244,21 +237,23 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     - dWh: Gradient of hidden-to-hidden weights, of shape (H, 4H)
     - db: Gradient of biases, of shape (4H,)
     """
-    dx, dprev_h, dprev_c, dWx, dWh, db = None, None, None, None, None, None
-    #############################################################################
-    # TODO: Implement the backward pass for a single timestep of an LSTM.       #
-    #                                                                           #
-    # HINT: For sigmoid and tanh you can compute local derivatives in terms of  #
-    # the output value from the nonlinearity.                                   #
-    #############################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    ##############################################################################
-    #                               END OF YOUR CODE                             #
-    ##############################################################################
+    N, H = dnext_h.shape
+    i, f, o, g, prev_c, next_c, x, Wx, prev_h, Wh, b, A = cache
+    dc = np.copy(dnext_c)
+    dc += dnext_h * o * (1 - np.tanh(next_c) ** 2)
+    do = dnext_h * np.tanh(next_c)
+    df, dprev_c = dc * prev_c, dc * f
+    di, dg = dc * g, dc * i
+    dai = di * (1 - sigmoid(A[:, :H])) * sigmoid(A[:, :H])
+    daf = df * (1 - sigmoid(A[:, H:2*H])) * sigmoid(A[:, H:2*H])
+    dao = do * (1 - sigmoid(A[:, 2*H:3*H])) * sigmoid(A[:, 2*H:3*H])
+    dag = dg * (1 - np.tanh(A[:, -H:]) ** 2)
+    dA = np.concatenate((dai, daf, dao, dag), axis=1)               # (N, 4H)
+    dx = dA @ Wx.T
+    dWx = x.T @ dA
+    dprev_h = dA @ Wh.T
+    dWh = prev_h.T @ dA
+    db = np.sum(dA, axis=0)
 
     return dx, dprev_h, dprev_c, dWx, dWh, db
 
