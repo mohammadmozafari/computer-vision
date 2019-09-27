@@ -74,7 +74,6 @@ class CaptioningRNN(object):
         for k, v in self.params.items():
             self.params[k] = v.astype(self.dtype)
 
-
     def loss(self, features, captions):
         """
         Compute training-time loss for the RNN. We input image features and
@@ -118,11 +117,17 @@ class CaptioningRNN(object):
         loss, grads = 0.0, {}
         h0 = features @ W_proj + b_proj                                             # (N, H)
         x, cache1 = word_embedding_forward(captions_in, W_embed)                    # (N, T, W)
-        h, cache2 = rnn_forward(x, h0, Wx, Wh, b)                                   # (N, T, H)
+        if self.cell_type == 'rnn':
+            h, cache2 = rnn_forward(x, h0, Wx, Wh, b)                               # (N, T, H)
+        else:
+            h, cache2 = lstm_forward(x, h0, Wx, Wh, b)
         scores, cache3 = temporal_affine_forward(h, W_vocab, b_vocab)               # (N, T, V)
         loss, dscores = temporal_softmax_loss(scores, captions_out, mask)
         dh, dW_vocab, db_vocab = temporal_affine_backward(dscores, cache3)
-        dx, dh0, dWx, dWh, db = rnn_backward(dh, cache2)
+        if self.cell_type == 'rnn':
+            dx, dh0, dWx, dWh, db = rnn_backward(dh, cache2)
+        else:
+            dx, dh0, dWx, dWh, db = lstm_backward(dh, cache2)
         dW_embed = word_embedding_backward(dx, cache1)
         dW_proj = features.T @ dh0
         db_proj = np.sum(dh0, axis=0)
@@ -166,15 +171,20 @@ class CaptioningRNN(object):
         W_embed = self.params['W_embed']
         Wx, Wh, b = self.params['Wx'], self.params['Wh'], self.params['b']
         W_vocab, b_vocab = self.params['W_vocab'], self.params['b_vocab']
+        H, _ = Wh.shape
+        V, W = W_embed.shape
 
-        word_index = self._start * np.ones((N, 1), dtype=np.int32)
+        x = np.ones((N, W)) * W_embed[self._start]
         prev_h, _ = affine_forward(features, W_proj, b_proj)
+        c = np.zeros((N, H))
         for i in range(max_length):
-            word_vector, _ = word_embedding_forward(word_index, W_embed)
-            word_vector = np.squeeze(word_vector)
-            prev_h, _ = rnn_step_forward(word_vector, prev_h, Wx, Wh, b)
+            if self.cell_type == 'rnn':
+                prev_h, _ = rnn_step_forward(x, prev_h, Wx, Wh, b)
+            else:
+                prev_h, c, _ = lstm_step_forward(x, prev_h, c, Wx, Wh, b)
             scores, _ = affine_forward(prev_h, W_vocab, b_vocab)
             idx = np.argmax(scores, axis=1)
             captions[:, i] = idx
+            x = W_embed[idx]
 
         return captions

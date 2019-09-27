@@ -280,26 +280,22 @@ def lstm_forward(x, h0, Wx, Wh, b):
     - h: Hidden states for all timesteps of all sequences, of shape (N, T, H)
     - cache: Values needed for the backward pass.
     """
-    h, cache = None, None
-    #############################################################################
-    # TODO: Implement the forward pass for an LSTM over an entire timeseries.   #
-    # You should use the lstm_step_forward function that you just defined.      #
-    #############################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    ##############################################################################
-    #                               END OF YOUR CODE                             #
-    ##############################################################################
+    N, T, D = x.shape
+    _, H = h0.shape
+    c, h = np.zeros((N, H)), np.zeros((N, T, H))
+    cache = []
+    h[:, 0, :], c, t = lstm_step_forward(x[:, 0, :], h0, c, Wx, Wh, b)
+    cache.append(t)
+    for i in range(1, T):
+        h[:, i, :], c, t = lstm_step_forward(x[:, i, :], h[:, i-1, :], c, Wx, Wh, b)
+        cache.append(t)
 
     return h, cache
 
 
 def lstm_backward(dh, cache):
     """
-    Backward pass for an LSTM over an entire sequence of data.]
+    Backward pass for an LSTM over an entire sequence of data.
 
     Inputs:
     - dh: Upstream gradients of hidden states, of shape (N, T, H)
@@ -312,19 +308,22 @@ def lstm_backward(dh, cache):
     - dWh: Gradient of hidden-to-hidden weight matrix of shape (H, 4H)
     - db: Gradient of biases, of shape (4H,)
     """
-    dx, dh0, dWx, dWh, db = None, None, None, None, None
-    #############################################################################
-    # TODO: Implement the backward pass for an LSTM over an entire timeseries.  #
-    # You should use the lstm_step_backward function that you just defined.     #
-    #############################################################################
-    # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    ##############################################################################
-    #                               END OF YOUR CODE                             #
-    ##############################################################################
+    N, T, H = dh.shape
+    _, D = cache[0][6].shape
+    dWx, dWh, db = 0, 0, 0
+    dx, dc = np.zeros((N, T, D)), np.zeros((N, H))
+    dhcopy = np.copy(dh)
+    for i in reversed(range(T)):
+        t1, t2, t3, t4, t5, t6 = lstm_step_backward(dhcopy[:, i, :], dc, cache[i])
+        dx[:, i, :] = t1
+        dc = t3
+        dWx += t4
+        dWh += t5
+        db += t6
+        if i == 0:
+            dh0 = t2
+        else:
+            dhcopy[:, i - 1, :] += t2
 
     return dx, dh0, dWx, dWh, db
 
@@ -422,3 +421,4 @@ def temporal_softmax_loss(x, y, mask, verbose=False):
     dx = dx_flat.reshape(N, T, V)
 
     return loss, dx
+    
